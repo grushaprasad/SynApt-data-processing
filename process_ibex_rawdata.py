@@ -1,4 +1,5 @@
 import json
+import csv
 data_file = '../FineJaeger16 Replication/pilot_raw_results.txt'
 
 
@@ -28,17 +29,26 @@ bad_participants = [
 	# 2. It uses 'quickly' (the adverb) instead of the verb because the adverb starts the VP?
 	# 3. Does not take into consideration sentences disambiguated at PP. Still uses second verb as beginning of disambiguating region
 
+#splits data into spr, lextale and demographic data
 def split_data(participant):
 	clean_data = []
 	lextale_data = []
+	demographic_data = []
 	for item in participant[3]:
 		sent_type = item[3][1]
 		if sent_type in ['filler', 'ambiguous', 'unambiguous']:
 			clean_data.append(item)
 		if sent_type == 'LexTale':
 			lextale_data.append(item)
-	return (clean_data,lextale_data)
+		if sent_type == 'demographic':
+			demographic_data.append(item[6][1])
+	
+	return (clean_data,lextale_data, demographic_data[:-1])
 
+#for a given sentence inputted as a list of words, returns a list of numbers where:
+	# - Everthing before the disambugation verb is 0
+	# - The disambiguation verb is 1
+	# - The word after the disambiguation verb is 2 and so on.  
 def get_disambig_region(verbs, words):
 	indices = []
 	prev = words[0]
@@ -52,12 +62,11 @@ def get_disambig_region(verbs, words):
 		prev = word
 
 	return indices
-		
+
+#For a given participant, returns lists of all relevant data. Each list is of the same length so that this can later be used in long form in R. 		
 def process_participant(participant_data, verbs):
 	sent_type = ''
 	i = 0
-	# for item in participant_data:
-	# 	sent_type = item[3][1]
 	all_words = []
 	all_sentences = []
 	all_rt = []
@@ -105,6 +114,7 @@ def process_participant(participant_data, verbs):
 
 	return(all_words, all_sentences, all_rt, all_indices, all_resps, all_sent_types)
 
+#For a given participant returns list of all words in lextale and a corresponding list of response (i.e. correct or wrong)
 def process_participant_lextale(lextale_data):
 	words = []
 	resps = []
@@ -116,9 +126,8 @@ def process_participant_lextale(lextale_data):
 
 	return(words,resps)
 
-
-
-def process_all_data(data, bad_participants, spr_filename, lextale_filename,verbs):
+# Process all participants and generates three csv files
+def process_all_data(data, bad_participants, spr_filename, lextale_filename, demographic_filename,verbs):
 	all_words = []
 	all_sentences = []
 	all_rt = []
@@ -130,6 +139,7 @@ def process_all_data(data, bad_participants, spr_filename, lextale_filename,verb
 	all_lextale_words = []
 	all_lextale_resps = []
 	all_lextale_participant_ids =[]
+	all_demographic_data = []
 
 	for participant in data:
 		participant_id = participant[3][0][6][1]
@@ -138,9 +148,10 @@ def process_all_data(data, bad_participants, spr_filename, lextale_filename,verb
 		#print type(participant_id)
 
 		if not (str(participant_id),participant_list) in bad_participants:
-			clean_data,lextale_data = split_data(participant)
+			clean_data,lextale_data,demographic_data = split_data(participant)
 			words, sentences, rt, indices, resps, sent_types = process_participant(clean_data, verbs)
 			lextale_words, lextale_resps = process_participant_lextale(lextale_data)
+			demographic_data.append(participant_id)
 			#print lextale_data
 			if not all(len(lst) == len(words) for lst in [words, sentences, rt, indices, resps]):
 				print 'for participant %s, not all lists are equal' %(participant_id)
@@ -164,6 +175,8 @@ def process_all_data(data, bad_participants, spr_filename, lextale_filename,verb
 			all_lextale_words.extend(lextale_words)
 			all_lextale_resps.extend(lextale_resps)
 			all_lextale_participant_ids.extend([participant_id]*len(lextale_words))
+
+			all_demographic_data.append(demographic_data)
 
 
 	if not all(len(lst) == len(all_words) for lst in [all_words, all_sentences, all_rt, all_indices, all_resps, participant_ids, participant_lists]):
@@ -195,81 +208,23 @@ def process_all_data(data, bad_participants, spr_filename, lextale_filename,verb
 	g.close()
 
 
+	with open(demographic_filename, "wb") as h:
+		writer = csv.writer(h)
+		for item in all_demographic_data:
+			#print i
+			#row = '%s,%s,%s\n' %(all_lextale_words[i], all_lextale_resps[i], all_lextale_participant_ids[i])
+			writer.writerow(item)
+	h.close()
 
+
+# Loads the data into a list from the datafile
 with open(data_file, "r") as file:
 	for line in file:
 		if not line[0] == '#':
 			results = json.loads(line.replace('\n', ''))
 			data.append(results)
 
-print len(data)
+# Calls the function to generate the csv files
+process_all_data(data, bad_participants, 'test.csv', 'lextale_test.csv', 'demographic_text.csv',verbs)
 
-process_all_data(data, bad_participants, 'test.csv', 'lextale_test.csv', verbs)
-
-
-
-
-
-
-
-
-
-
-"""
-
-
-rt = ''
-sent_type = ''
-sent = ''
-word = ''
-resp = ''
-pos_in_sent = ''  #first word in disambiguating region is 1 and so on
-
-list_number = data[0][1]   #the list of the first participant rn
-participant = data[0][3][0][6][1]  #participant id of the first participant rn
-
-for item in data[0][3]:
-	sent_type = item[3][1]
-
-	if sent_type in ['filler', 'ambiguous', 'unambiguous']:
-		#rt = item[9][1]
-		#sent = item[9][1]
-		if item[0][1] == 'Question':
-			word = item[5][1]
-			rt = item[8][1]
-			#resp = item[7]
-			if item[7][1]==1: resp = 'correct'   
-			elif item[7][1]==0: resp = 'wrong'
-			#sent = item[9]
-		else: 
-			word = item[6][1]
-			rt = item[7][1]
-			sent = item[9][1]
-			resp = 'na'
-	# for thing in item:
-	# 	print thing
-	# if item[0][1] == 'Question': print '_____________________________________________________________'
-	#print
-		#sent_type = thing[3]
-		#print sent_type
-	#print (sent_type, rt, word,resp)
-	#if item[0][1] == 'Question': print
-
-# print list_number
-# print participant
-
-#print len(data[0][3])
-
-
-words = ['An', 'impatient', 'shopper','shoved', 'blah', 'were', 'had', 'blah','blah' ]
-print get_disambig_region(verbs, words)
-
-"""
-"""
-To do: 
-	- Mark pos in sent by figuring out when the disambiguating regions starts
-	- 
-
-
-"""
 

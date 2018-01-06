@@ -12,18 +12,32 @@ verbs = ['dropped', 'hit', 'phoned', 'were', 'declared', 'worked', 'moved', 'got
 		'burnt','rinsed','watched','played','unloaded','found', 'bathed', 'read','remembered','quickly','begged',
 		'answered','cheated', 'left', 'shoved', 'complained']
 
+bad_participants = [
+ 			('5a26b1338766a400019007a2', 5),
+ 			('5a26b1338766a400019007a2', 7),
+ 			('5a26b1338766a400019007a2', 8),
+ 			('5a26b1338766a400019007a2', 9),
+ 			('5a26b1338766a400019007a2', 10),
+ 			('5a270017e2d20d00013207ff', 14),
+ 			('Tal Linzen', 6),
+ 			('das', 6),
+ 			]
+
 #Note: Three things to note
 	# 1. It has 'were' as a disambiguating verb. But 'were' is also used in 'who were'. So need to have some form of conditional to avoid this
 	# 2. It uses 'quickly' (the adverb) instead of the verb because the adverb starts the VP?
 	# 3. Does not take into consideration sentences disambiguated at PP. Still uses second verb as beginning of disambiguating region
 
-def remove_unwanted(participant):
+def split_data(participant):
 	clean_data = []
+	lextale_data = []
 	for item in participant[3]:
 		sent_type = item[3][1]
 		if sent_type in ['filler', 'ambiguous', 'unambiguous']:
 			clean_data.append(item)
-	return clean_data
+		if sent_type == 'LexTale':
+			lextale_data.append(item)
+	return (clean_data,lextale_data)
 
 def get_disambig_region(verbs, words):
 	indices = []
@@ -49,6 +63,7 @@ def process_participant(participant_data, verbs):
 	all_rt = []
 	all_resps = []
 	all_indices = []
+	all_sent_types = []
 
 	while i < len(participant_data):
 		sent_just_ended = False
@@ -57,11 +72,11 @@ def process_participant(participant_data, verbs):
 		sentence = []
 		resps = []
 		sent_type = []
+		sent = ''  # having this because every row (in long form) needs to have the sentence it is associated with. This information is not noted for the question. SO keeping track
 
 		while not sent_just_ended:
 			curr = participant_data[i]
 			sent_type.append(curr[3][1])
-			sent = ''  # having this because every row (in long form) needs to have the sentence it is associated with. This information is not noted for the question. SO keeping track
 			
 			if not curr[0][1] == 'Question':
 				words.append(curr[6][1])
@@ -72,8 +87,9 @@ def process_participant(participant_data, verbs):
 			else:
 				words.append(curr[5][1])
 				rt.append(curr[8][1])
+				sentence.append(sent)
 				if curr[7][1]==1: resps.append('correct')
-				elif curr[7][1]==1: resps.append('wrong')
+				elif curr[7][1]==0: resps.append('wrong')
 				else: print 'Found a response that is not 1 or 0'
 				sent_just_ended = True
 			i+=1
@@ -85,49 +101,99 @@ def process_participant(participant_data, verbs):
 		all_rt.extend(rt)
 		all_resps.extend(resps)
 		all_indices.extend(disambig_region_indices)
+		all_sent_types.extend(sent_type)
 
-	return(all_words, all_sentences, all_rt, all_indices, all_resps)
+	return(all_words, all_sentences, all_rt, all_indices, all_resps, all_sent_types)
 
-			
-def process_all_data(data, bad_participants, filename, verbs):
+def process_participant_lextale(lextale_data):
+	words = []
+	resps = []
+	for item in lextale_data:
+		words.append(item[5][1])
+		if item[7][1]==1: resps.append('correct')
+		elif item[7][1]==0: resps.append('wrong')
+		else: print 'Found a response that is not 1 or 0'
+
+	return(words,resps)
+
+
+
+def process_all_data(data, bad_participants, spr_filename, lextale_filename,verbs):
 	all_words = []
 	all_sentences = []
 	all_rt = []
 	all_indices = []
 	all_resps = []
+	all_sent_types = []
 	participant_ids = []
 	participant_lists = []
+	all_lextale_words = []
+	all_lextale_resps = []
+	all_lextale_participant_ids =[]
 
 	for participant in data:
 		participant_id = participant[3][0][6][1]
 		participant_list = participant[1]
+		#print type(participant_list)
+		#print type(participant_id)
 
-		if not participant_id in bad_participants:
-			clean_data = remove_unwanted(participant)
-			words, sentences, rt, indices, resps = process_participant(clean_data, verbs)
-			
+		if not (str(participant_id),participant_list) in bad_participants:
+			clean_data,lextale_data = split_data(participant)
+			words, sentences, rt, indices, resps, sent_types = process_participant(clean_data, verbs)
+			lextale_words, lextale_resps = process_participant_lextale(lextale_data)
+			#print lextale_data
 			if not all(len(lst) == len(words) for lst in [words, sentences, rt, indices, resps]):
 				print 'for participant %s, not all lists are equal' %(participant_id)
+				print 'Overall not all lists are equal'
+				print 'words: %s' %(len(words)) 
+				print 'sentences: %s' %(len(sentences))
+				print 'rt: %s' %(len(rt))
+				print 'indices: %s' %(len(indices))
+				print 'resps: %s' %(len(resps))
+				print
 
 			all_words.extend(words)
 			all_sentences.extend(sentences)
 			all_rt.extend(rt)
 			all_indices.extend(indices)
 			all_resps.extend(resps)
+			all_sent_types.extend(sent_types)
 			participant_ids.extend([participant_id]*len(words))
 			participant_lists.extend([participant_list]*len(words))
 
+			all_lextale_words.extend(lextale_words)
+			all_lextale_resps.extend(lextale_resps)
+			all_lextale_participant_ids.extend([participant_id]*len(lextale_words))
+
 
 	if not all(len(lst) == len(all_words) for lst in [all_words, all_sentences, all_rt, all_indices, all_resps, participant_ids, participant_lists]):
-				print 'Overall not all lists are equal' 
+				print 'Overall not all lists are equal'
+				print 'words: %s' %(len(all_words)) 
+				print 'sentences: %s' %(len(all_sentences))
+				print 'rt: %s' %(len(all_rt))
+				print 'indices: %s' %(len(all_indices))
+				print 'resps: %s' %(len(all_resps))
+				print 'participant_ids: %s' %(len(participant_ids))
+				print 'participant_lists: %s' %(len(participant_lists))
+				print
 
 
-	with open(filename, "wb") as f:
+	with open(spr_filename, "wb") as f:
 		#writer = csv.writer(f)
 		for i in range(len(all_words)):
-			print i
-			row = '%s,%s,%s,%s,%s,%s,%s' %(all_words[i], all_sentences[i], all_rt[i], all_indices[i], all_resps[i], participant_ids[i], participant_lists[i])
+			#print i
+			row = '%s,%s,%s,%s,%s,%s,%s, %s\n' %(all_sentences[i], all_words[i], all_sent_types[i], all_rt[i], all_indices[i], all_resps[i], participant_ids[i], participant_lists[i])
 			f.write(row)
+	f.close()
+
+	with open(lextale_filename, "wb") as g:
+		#writer = csv.writer(f)
+		for i in range(len(all_lextale_words)):
+			#print i
+			row = '%s,%s,%s\n' %(all_lextale_words[i], all_lextale_resps[i], all_lextale_participant_ids[i])
+			g.write(row)
+	g.close()
+
 
 
 with open(data_file, "r") as file:
@@ -136,7 +202,9 @@ with open(data_file, "r") as file:
 			results = json.loads(line.replace('\n', ''))
 			data.append(results)
 
-process_all_data(data, [], 'test.csv', verbs)
+print len(data)
+
+process_all_data(data, bad_participants, 'test.csv', 'lextale_test.csv', verbs)
 
 
 

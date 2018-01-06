@@ -1,6 +1,9 @@
 import json
 import csv
 data_file = '../FineJaeger16 Replication/pilot_raw_results.txt'
+spr_filename = 'pilot.csv'
+lextale_filename = 'pilot_lextale.csv'
+demographic_filename = 'pilot_demographic.csv'
 
 
 data = []
@@ -225,6 +228,6 @@ with open(data_file, "r") as file:
 			data.append(results)
 
 # Calls the function to generate the csv files
-process_all_data(data, bad_participants, 'test.csv', 'lextale_test.csv', 'demographic_text.csv',verbs)
+process_all_data(data, bad_participants, spr_filename, lextale_filename, demographic_filename,verbs)
 
 
